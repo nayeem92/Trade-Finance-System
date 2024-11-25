@@ -10,7 +10,7 @@ class GuaranteeController extends Controller
     // Show the Applicant's Guarantees (only their own guarantees)
     public function index()
     {
-        $guarantees = Guarantee::where('user_id', auth()->id())->get(); // Only fetch guarantees for the logged-in user
+        $guarantees = Guarantee::where('user_id', auth()->id())->get(); // Fetch guarantees only for the logged-in user
         return view('guarantees.index', compact('guarantees'));
     }
 
@@ -23,27 +23,23 @@ class GuaranteeController extends Controller
     // Store a newly created Guarantee
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'corporate_reference_number' => 'required|unique:guarantees',
-            'expiry_date' => 'required|date|after:today',
-            // More validation rules here...
-        ]);
+        // Add the logged-in user's ID to the data
+        $request->merge(['user_id' => auth()->id()]);
 
-        // Save the guarantee with the logged-in user's ID
-        $guarantee = new Guarantee($validated);
-        $guarantee->user_id = auth()->id();  // Link guarantee to the logged-in user
-        $guarantee->save();
+        // Insert the data into the 'guarantees' table
+        Guarantee::create($request->all());
 
-        return redirect()->route('dashboard')->with('success', 'Guarantee created.');
+        return redirect()->route('applicant.guarantees')->with('success', 'Guarantee created.');
     }
 
     // Show the form to edit a Guarantee
     public function edit($id)
     {
         $guarantee = Guarantee::findOrFail($id);
-        // Ensure the logged-in user can only edit their own guarantee
-        if ($guarantee->user_id != auth()->id()) {
-            abort(403, 'Unauthorized');
+
+        // Check if the logged-in user is the owner or an admin
+        if ($guarantee->user_id !== auth()->id() && !auth()->user()->is_admin) {
+            return redirect()->route('applicant.guarantees')->with('error', 'You are not authorized to edit this guarantee.');
         }
 
         return view('guarantees.edit', compact('guarantee'));
@@ -54,19 +50,15 @@ class GuaranteeController extends Controller
     {
         $guarantee = Guarantee::findOrFail($id);
 
-        // Ensure the logged-in user can only update their own guarantee
-        if ($guarantee->user_id != auth()->id()) {
-            abort(403, 'Unauthorized');
+        // Check if the logged-in user is the owner or an admin
+        if ($guarantee->user_id !== auth()->id() && !auth()->user()->is_admin) {
+            return redirect()->route('applicant.guarantees')->with('error', 'You are not authorized to update this guarantee.');
         }
 
-        $validated = $request->validate([
-            'expiry_date' => 'required|date|after:today',
-            // More validation rules here...
-        ]);
+        // Update the guarantee with the new data
+        $guarantee->update($request->all());
 
-        $guarantee->update($validated);
-
-        return redirect()->route('dashboard')->with('success', 'Guarantee updated.');
+        return redirect()->route('applicant.guarantees')->with('success', 'Guarantee updated.');
     }
 
     // Delete the specified Guarantee
@@ -74,14 +66,15 @@ class GuaranteeController extends Controller
     {
         $guarantee = Guarantee::findOrFail($id);
 
-        // Ensure the logged-in user can only delete their own guarantee
-        if ($guarantee->user_id != auth()->id()) {
-            abort(403, 'Unauthorized');
+        // Check if the logged-in user is the owner or an admin
+        if ($guarantee->user_id !== auth()->id() && !auth()->user()->is_admin) {
+            return redirect()->route('applicant.guarantees')->with('error', 'You are not authorized to delete this guarantee.');
         }
 
+        // Delete the guarantee
         $guarantee->delete();
 
-        return redirect()->route('dashboard')->with('success', 'Guarantee deleted.');
+        return redirect()->route('applicant.guarantees')->with('success', 'Guarantee deleted.');
     }
 
     // Show all Guarantees for Admin (Admin can see all)
